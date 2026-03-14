@@ -1,0 +1,20 @@
+# Data folders
+data/raw/
+data/processed/
+
+# Model weights and encoders
+models/
+*.joblib
+
+# Training outputs and logs
+outputs/training_logs/
+outputs/checkpoints/
+results/
+
+# Python environment
+.venv/
+__pycache__/
+*.pyc
+
+# OS generated files
+.DS_Store
