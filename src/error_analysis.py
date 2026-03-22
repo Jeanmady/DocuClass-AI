@@ -60,7 +60,7 @@ def perform_error_analysis(df):
     model.fit(X_train_vec, y_train)
     y_pred = model.predict(X_test_vec)
 
-    # 1. Class Performance Table
+    # Class Performance Table
     report = classification_report(y_test, y_pred, output_dict=True)
     report_df = pd.DataFrame(report).transpose()
     
@@ -71,7 +71,7 @@ def perform_error_analysis(df):
     class_stats = report_df.drop(['accuracy', 'macro avg', 'weighted avg'], errors='ignore')
     print(class_stats[['precision', 'recall', 'f1-score', 'support']].sort_values(by='f1-score'))
 
-    # 2. Confusion Mapping (Top Mistaken Pairs)
+    # Confusion Mapping (Top Mistaken Pairs)
     results_df = pd.DataFrame({'Actual': y_test, 'Predicted': y_pred})
     mistakes = results_df[results_df['Actual'] != results_df['Predicted']]
 
@@ -81,7 +81,7 @@ def perform_error_analysis(df):
     if not mistakes.empty:
         print(mistakes.groupby(['Actual', 'Predicted']).size().sort_values(ascending=False).head(10))
     
-    # 3. Export Visual Confusion Matrix
+    # Export Visual Confusion Matrix
     export_visual_analysis(y_test, y_pred, model.classes_)
 
 def export_visual_analysis(y_true, y_pred, labels):

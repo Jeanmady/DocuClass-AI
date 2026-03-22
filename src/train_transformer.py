@@ -24,42 +24,53 @@ LOGS_DIR = ROOT_DIR / "outputs" / "training_logs"
 
 class FocalLoss(nn.Module):
     """
-    Implements Alpha-Weighted Focal Loss to address extreme class imbalance.
-    
-    Attributes:
-        alpha (torch.Tensor): Normalised class weights based on inverse frequency.
-        gamma (float): Focusing parameter to down-weight easy examples.
+    Implements Alpha-Weighted Focal Loss. 
+    Manual implementation to bypass MPS-specific weighted cross-entropy bugs.
     """
     def __init__(self, alpha=None, gamma=2.0):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
-        self.alpha = alpha
+        self.alpha = alpha # This is our weight tensor
 
     def forward(self, inputs, targets):
-        # We pass the alpha weights directly into cross_entropy
-        ce_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.alpha)
+        # 1. Calculate standard cross entropy without weights first (reduction='none' is stable)
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none')
+        
+        # 2. Calculate probabilities
         pt = torch.exp(-ce_loss)
-        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
-        return focal_loss
+        
+        # 3. Apply Focal term
+        focal_term = (1 - pt) ** self.gamma
+        loss = focal_term * ce_loss
+        
+        # 4. Apply Alpha weights manually if provided
+        if self.alpha is not None:
+            # Ensure alpha is on the same device as the loss
+            self.alpha = self.alpha.to(inputs.device)
+            # Gather the weight corresponding to each target class in the batch
+            batch_weights = self.alpha[targets]
+            loss = loss * batch_weights
+            
+        return loss.mean()
 
 class WeightedTrainer(Trainer):
     """
-    Custom Hugging Face Trainer that overrides the loss computation 
-    to utilize class-aware focal loss.
+    Custom Trainer that correctly handles device placement for the Focal Loss weights.
     """
     def __init__(self, alpha_weights, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.alpha_weights = alpha_weights
+        # Move weights to the correct device immediately
+        self.loss_fct = FocalLoss(alpha=alpha_weights, gamma=2.0)
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.get("labels")
         outputs = model(**inputs)
         logits = outputs.get("logits")
         
-        # Ensure loss function and weights are on the same device as the model (MPS/CPU)
-        loss_fct = FocalLoss(alpha=self.alpha_weights, gamma=2.0).to(model.device)
+        # Ensure the loss function knows which device the model is on
+        self.loss_fct.to(model.device)
         
-        loss = loss_fct(logits, labels)
+        loss = self.loss_fct(logits, labels)
         return (loss, outputs) if return_outputs else loss
 
 def compute_metrics(eval_pred):

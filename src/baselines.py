@@ -20,21 +20,30 @@ FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_and_clean_data(file_path):
     """
-    Loads the processed corpus and performs final sanitisation for 
-    traditional machine learning vectorizers.
+    Loads the processed corpus and applies aggressive sanitisation to 
+    ensure Scikit-learn vectorizers receive 100% string data.
     """
     if not file_path.exists():
         raise FileNotFoundError(f"Corpus not found at {file_path}. Run extraction first.")
     
     df = pd.read_csv(file_path)
     
-    # Standardise text column to string type to prevent vectorizer type errors
+    # 1. Force the 'text' column to string type and handle real NaN objects
     df['text'] = df['text'].astype(str)
     
-    # Remove null artifacts and entries flagged as empty/scanned during extraction
-    df = df[df['text'].str.strip().lower() != "nan"]
-    clean_df = df[df['is_empty'] == 0].copy()
+    # 2. Replace common 'null' string indicators with actual NaNs for easy dropping
+    # This catches "nan", "None", "NULL", and whitespace-only strings
+    df['text'] = df['text'].replace(['nan', 'None', 'nan ', ' nan'], np.nan, regex=True)
+    df = df.dropna(subset=['text'])
     
+    # 3. Final filter: Ensure character count is > 50 and is_empty flag is 0
+    # (Sometimes empty docs get a char_count of 3 or 4 due to metadata)
+    clean_df = df[(df['is_empty'] == 0) & (df['text'].str.len() > 50)].copy()
+    
+    # One last safety check: ensure everything is still a string
+    clean_df['text'] = clean_df['text'].apply(lambda x: str(x) if not isinstance(x, str) else x)
+    
+    print(f"Sanitisation complete. Training on {len(clean_df)} valid string documents.")
     return clean_df
 
 def run_baseline_comparison(df):
@@ -85,22 +94,34 @@ def run_baseline_comparison(df):
 
 def generate_visuals(y_true, y_pred, class_names, model_name):
     """
-    Generates and exports confusion matrices to the project's output directory.
+    Generates and exports normalized confusion matrices (percentages) 
+    to highlight performance across imbalanced classes.
     """
-    plt.figure(figsize=(15, 12))
+    plt.figure(figsize=(18, 14))
+    
+    # Calculate raw confusion matrix
     cm = confusion_matrix(y_true, y_pred, labels=class_names)
     
-    sns.heatmap(cm, annot=False, fmt='d', cmap='Blues', 
-                xticklabels=class_names, yticklabels=class_names)
+    # Normalise by row (True Labels)
+    # use np.errstate to handle any classes with zero samples in the test set
+    with np.errstate(all='ignore'):
+        cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        cm_normalized = np.nan_to_num(cm_normalized) # Replace NaN with 0
+
+    # Plot using the normalized data
+    # fmt='.2f' shows proportions (e.g., 0.85). Use '.0%' for percentages (e.g., 85%)
+    sns.heatmap(cm_normalized, annot=True, fmt='.2f', cmap='Blues', 
+                xticklabels=class_names, yticklabels=class_names,
+                annot_kws={"size": 8}) # Smaller font to fit percentages
     
-    plt.title(f"Confusion Matrix: {model_name}")
-    plt.ylabel('Actual Label')
+    plt.title(f"Normalized Confusion Matrix: {model_name}\n(Values represent Recall per class)")
+    plt.ylabel('Ground Truth Label')
     plt.xlabel('Predicted Label')
     plt.xticks(rotation=90)
     plt.tight_layout()
     
-    save_path = FIGURES_DIR / f"cm_{model_name}.png"
-    plt.savefig(save_path)
+    save_path = FIGURES_DIR / f"cm_{model_name}_normalized.png"
+    plt.savefig(save_path, dpi=300) 
     plt.close()
 
 if __name__ == "__main__":
