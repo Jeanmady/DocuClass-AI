@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_validate
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.svm import LinearSVC
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
@@ -28,19 +28,17 @@ def load_and_clean_data(file_path):
     
     df = pd.read_csv(file_path)
     
-    # 1. Force the 'text' column to string type and handle real NaN objects
+    # Force the 'text' column to string type and handle real NaN objects
     df['text'] = df['text'].astype(str)
     
-    # 2. Replace common 'null' string indicators with actual NaNs for easy dropping
-    # This catches "nan", "None", "NULL", and whitespace-only strings
+    # Replace common 'null' string indicators with actual NaNs for easy dropping
     df['text'] = df['text'].replace(['nan', 'None', 'nan ', ' nan'], np.nan, regex=True)
     df = df.dropna(subset=['text'])
     
-    # 3. Final filter: Ensure character count is > 50 and is_empty flag is 0
-    # (Sometimes empty docs get a char_count of 3 or 4 due to metadata)
+    # Final filter: Ensure character count is > 50 and is_empty flag is 0
     clean_df = df[(df['is_empty'] == 0) & (df['text'].str.len() > 50)].copy()
     
-    # One last safety check: ensure everything is still a string
+    # Final safety check: ensure everything is a string
     clean_df['text'] = clean_df['text'].apply(lambda x: str(x) if not isinstance(x, str) else x)
     
     print(f"Sanitisation complete. Training on {len(clean_df)} valid string documents.")
@@ -48,20 +46,10 @@ def load_and_clean_data(file_path):
 
 def run_baseline_comparison(df):
     """
-    Trains and evaluates multiple baseline models to establish a 
-    performance floor for the document classification task.
+    Performs 5-Fold Stratified Cross-Validation and a final Hold-out evaluation
+    to establish a rigorous performance floor.
     """
-    # Stratified split ensures class proportions are maintained across 188:1 imbalance
-    X_train, X_test, y_train, y_test = train_test_split(
-        df['text'], 
-        df['label'], 
-        test_size=0.2, 
-        random_state=42, 
-        stratify=df['label']
-    )
-
-    # N-gram range (1, 3) allows the model to capture technical phrases 
-    # such as 'Environmental Impact Assessment' rather than just individual words.
+    # Define Pipelines with N-Grams to capture context
     pipelines = [
         ("BoW_SVM", CountVectorizer(max_features=10000, stop_words='english', ngram_range=(1, 3))),
         ("TFIDF_SVM", TfidfVectorizer(max_features=10000, stop_words='english', ngram_range=(1, 3)))
@@ -70,23 +58,53 @@ def run_baseline_comparison(df):
     results = []
 
     for name, vectorizer in pipelines:
-        print(f"Executing Pipeline: {name}")
+        print(f"\n--- Evaluating Pipeline: {name} ---")
         
-        # Feature Extraction
+        # Pre-process text for CV
+        X = vectorizer.fit_transform(df['text'])
+        y = df['label']
+        
+        # STRATIFIED CROSS-VALIDATION
+        # use 5 folds to ensure every document is used in a test set once.
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        print("Running 5-Fold Stratified Cross-Validation...")
+        
+        cv_results = cross_validate(
+            LinearSVC(class_weight='balanced', max_iter=5000, dual='auto'),
+            X, y, 
+            cv=skf, 
+            scoring='f1_macro',
+            n_jobs=-1 # Uses all CPU cores for speed
+        )
+        
+        mean_f1 = cv_results['test_score'].mean()
+        std_f1 = cv_results['test_score'].std()
+        
+        # FINAL HOLD OUT FOR VISUALISATION
+        # still do a standard split to generate the Confusion Matrix
+        X_train, X_test, y_train, y_test = train_test_split(
+            df['text'], df['label'], test_size=0.2, random_state=42, stratify=df['label']
+        )
+        
         X_train_vec = vectorizer.fit_transform(X_train)
         X_test_vec = vectorizer.transform(X_test)
         
-        # LinearSVC with balanced class weights to penalise minority class errors
         model = LinearSVC(class_weight='balanced', max_iter=5000, dual='auto')
         model.fit(X_train_vec, y_train)
-        
-        # Evaluation
         y_pred = model.predict(X_test_vec)
-        acc = accuracy_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred, average='macro')
         
-        results.append({"Model": name, "Accuracy": acc, "Macro F1": f1})
-        print(f"{name} Result -> Accuracy: {acc:.4f} | Macro F1: {f1:.4f}")
+        holdout_acc = accuracy_score(y_test, y_pred)
+        holdout_f1 = f1_score(y_test, y_pred, average='macro')
+        
+        print(f"CV Macro F1: {mean_f1:.4f} (+/- {std_f1:.4f})")
+        print(f"Hold-out Accuracy: {holdout_acc:.4f}")
+
+        results.append({
+            "Model": name, 
+            "CV_Mean_F1": mean_f1, 
+            "CV_Std": std_f1, 
+            "Holdout_Acc": holdout_acc
+        })
         
         generate_visuals(y_test, y_pred, model.classes_, name)
 
@@ -98,21 +116,15 @@ def generate_visuals(y_true, y_pred, class_names, model_name):
     to highlight performance across imbalanced classes.
     """
     plt.figure(figsize=(18, 14))
-    
-    # Calculate raw confusion matrix
     cm = confusion_matrix(y_true, y_pred, labels=class_names)
     
-    # Normalise by row (True Labels)
-    # use np.errstate to handle any classes with zero samples in the test set
     with np.errstate(all='ignore'):
         cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        cm_normalized = np.nan_to_num(cm_normalized) # Replace NaN with 0
+        cm_normalized = np.nan_to_num(cm_normalized)
 
-    # Plot using the normalized data
-    # fmt='.2f' shows proportions (e.g., 0.85). Use '.0%' for percentages (e.g., 85%)
     sns.heatmap(cm_normalized, annot=True, fmt='.2f', cmap='Blues', 
                 xticklabels=class_names, yticklabels=class_names,
-                annot_kws={"size": 8}) # Smaller font to fit percentages
+                annot_kws={"size": 8})
     
     plt.title(f"Normalized Confusion Matrix: {model_name}\n(Values represent Recall per class)")
     plt.ylabel('Ground Truth Label')
@@ -127,11 +139,11 @@ def generate_visuals(y_true, y_pred, class_names, model_name):
 if __name__ == "__main__":
     print(f"Project Root: {ROOT_DIR}")
     dataset = load_and_clean_data(DATA_PATH)
-    print(f"Dataset Loaded. Training on {len(dataset)} samples.")
+    print(f"Dataset Loaded. Total samples: {len(dataset)}")
     
     summary = run_baseline_comparison(dataset)
     
-    print("\n" + "="*30)
-    print("BASELINE PERFORMANCE SUMMARY")
-    print("="*30)
+    print("\n" + "="*50)
+    print("FINAL BASELINE RESULTS (WITH CROSS-VALIDATION)")
+    print("="*50)
     print(summary)

@@ -33,17 +33,17 @@ class FocalLoss(nn.Module):
         self.alpha = alpha # This is our weight tensor
 
     def forward(self, inputs, targets):
-        # 1. Calculate standard cross entropy without weights first (reduction='none' is stable)
+        # Calculate standard cross entropy without weights first (reduction='none' is stable)
         ce_loss = F.cross_entropy(inputs, targets, reduction='none')
         
-        # 2. Calculate probabilities
+        # Calculate probabilities
         pt = torch.exp(-ce_loss)
         
-        # 3. Apply Focal term
+        # Apply Focal term
         focal_term = (1 - pt) ** self.gamma
         loss = focal_term * ce_loss
         
-        # 4. Apply Alpha weights manually if provided
+        # Apply Alpha weights manually if provided
         if self.alpha is not None:
             # Ensure alpha is on the same device as the loss
             self.alpha = self.alpha.to(inputs.device)
@@ -81,6 +81,7 @@ def compute_metrics(eval_pred):
     f1_metric = evaluate.load("f1")
     predictions, labels = eval_pred
     predictions = np.argmax(predictions, axis=1)
+
     return f1_metric.compute(predictions=predictions, references=labels, average="macro")
 
 def calculate_class_weights(dataset):
@@ -91,9 +92,12 @@ def calculate_class_weights(dataset):
     labels = dataset["label"]
     counts = np.bincount(labels)
     total = len(labels)
-    n_classes = len(counts)
-    
-    weights = total / (n_classes * counts)
+
+    # Creates a strong penalty without destabilizing the gradients.
+    weights = total / np.sqrt(counts) 
+
+    # Normalize so the average weight is 1.0
+    weights = weights / weights.mean()
     return torch.tensor(weights, dtype=torch.float)
 
 def run_training():
@@ -121,17 +125,17 @@ def run_training():
     # Training Configuration for Local/On-Premise environments
     training_args = TrainingArguments(
         output_dir=str(LOGS_DIR),
-        learning_rate=5e-5,
+        learning_rate=2e-5,           # Lower learning rate for stability
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
-        num_train_epochs=5,
+        num_train_epochs=10,          # More time to learn planning jargon
         weight_decay=0.01,
         eval_strategy="epoch",
         save_strategy="epoch",
         load_best_model_at_end=True,
         metric_for_best_model="f1",
-        logging_steps=50,
-        dataloader_num_workers=0 # Optimised for macOS process spawning
+        max_grad_norm=1.0,            # <--- This stops the 55.0 spikes
+        dataloader_num_workers=0
     )
 
     trainer = WeightedTrainer(
@@ -148,7 +152,7 @@ def run_training():
     print(f"Executing training on: {training_args.device}")
     trainer.train()
 
-    # Save the final fine-tuned model and tokenizer for deployment phase
+    # Save the final fine tuned model and tokenizer for deployment phase
     model.save_pretrained(MODEL_OUT)
     tokenizer.save_pretrained(MODEL_OUT)
     print(f"Success: Model persisted to {MODEL_OUT}")
