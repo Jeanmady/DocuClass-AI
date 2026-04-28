@@ -1,86 +1,289 @@
-python src/extraction.py
+# DocuClassAI
 
-each box has one figure and one takeaway message.
-must have numbers to back everrything up (all my claims)
-lessons learnt, whats coming next, speculative last sentence
+Cascading hybrid classifier for UK statutory planning documents. Classifies planning application PDFs into 23 statutory categories using a two tier on-premise pipeline with no cloud API dependency.
 
+---
 
-f1 macro of 0.809 and 98 perc accuracy baseline     
-svm baseline: Fails on Environmental (0.48 Recall)
-adding in gradient clipping and alpha smoothing (square root weighting)
+## System Overview
 
-ask all questions to the lllm and make it chose the closest one
-with cloud llm cost benefits vs performance
+DocuClassAI uses a cascading architecture designed for on-premise deployment at local planning authorities under GDPR constraints.
 
-week extension???
+**Tier 1 — MiniLM Triage:** A fine-tuned `microsoft/MiniLM-L12-H384-uncased` transformer (22M parameters) handles approximately 98% of documents at ~140ms per document. Documents are tokenised using a head-tail strategy (255 head + 255 tail tokens) to capture both the document title and its conclusions within the 512-token window.
 
-the measures i am using, macro measures, normalised is it imbalanced
+**Tier 2 — Mistral-Nemo Adjudicator:** The 2% of documents where Tier 1 confidence falls below 0.80, or where the predicted class belongs to the Environmental Statement / Biodiversity Survey conflict pair, are escalated to a locally-hosted Mistral-Nemo 12B model via Ollama. This adjudicator receives the full statutory class definitions and reasons zero-shot over the document.
 
-see there is a problem. round 2! identify issue then try to address the issue ie the heavy issues with fire statemetns
+**Fidelity Gate:** Before either tier runs, documents are checked for extractable text. Image based scans (common for Fire Statements) are routed to a human review queue rather than force classified.
 
- The Upgraded Baseline (The "Before")
-What I did: Re-ran the SVM baseline using N-grams (capturing phrases, not just words).
-Results: Got 98.25% Accuracy, but the Macro F1 was 0.81.
-The Problem: I found that the SVM is "blind" to complex reports. It had a recall of only 0.48 for Environmental Statements, usually confusing them with Biodiversity reports.
+All classification runs locally. No document content leaves the deployment machine.
 
-3. The MiniLM Transformer (The "Middle")
-Technical Fixes:
-Implemented "Head-Tail" tokenization: Instead of just taking the start of the document, I’m stitching the first 255 and last 255 tokens together so the model sees the header and the conclusion/signatures.
-Used Alpha-Weighted Focal Loss: Applied a massive penalty for missing small classes to handle that 188:1 imbalance.
-Results: The MiniLM hit a Macro F1 of 0.84. It beat the SVM, but still made 14 errors in the test set.
+---
 
-4. The Hybrid Adjudicator (The "After" / Original Method)
-What I did: Built a second tier using a local Mistral-Nemo (12B) model via Ollama.
-The Logic: I took those 14 errors from the MiniLM and passed the text to Mistral along with the "Gold Standard" class definitions I generated.
-The Result: Mistral rescued 13 out of the 14 errors.
-Final Stats: The final hybrid system hit 99.85% Accuracy.
+## Requirements
 
-5. Data Insight found along the way
-Fire Statements: Only 0.6% of the data were unreadable scans, but 60% of those scans were Fire Statements. It's a small gap, but it's in the most important category.
+- **Python:** 3.13 (pinned in `.python-version`)
+- **[uv](https://docs.astral.sh/uv/):** dependency manager — install via `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- **Node.js:** 18+ (for the React frontend)
+- **Apple Silicon recommended:** the MPS backend is used automatically on Apple Silicon. CPU fallback is supported but will be slower for Tier 1 inference.
+- **Ollama:** required for Tier 2 adjudication — install from [ollama.com](https://ollama.com)
+- **Disk space:** ~8 GB for the Mistral-Nemo 12B model; ~500 MB for MiniLM weights
 
-6. Where I am now
-Final Result: 99.85% accuracy.
-Remaining Error: I have exactly one document left that the system still can't get right (an Environmental Statement it thinks is Biodiversity).
-Next step: Just focusing on the poster now.
-Quick Summary Table (in case he wants to see it):
-SVM: 0.81 F1 (Fails on technical reports)
-MiniLM: 0.84 F1 (Handles context better, but still makes mistakes)
-Hybrid (Final): 99.85% Accuracy (Rescued almost all mistakes using the 12B model)
+---
 
+## Installation
 
-1. On Result Presentation (Addressing Skepticism)
-"I achieved 99.85% final accuracy with the Hybrid model, but I know markers can be skeptical of near-100% scores. On the poster, should I lead with that 99.85% headline, or should I prioritise the Macro F1 score (0.84 for local, ~0.97 for hybrid) to prove to them that the model isn't just ignoring the 188:1 class imbalance?"
+```bash
+git clone https://github.com/Jeanmady/DocuClass-AI.git
+cd DocuClass-AI
+uv sync
+```
 
-2. On Technical Visuals (Addressing Marker 1 Feedback)
-"Marker 1 noted a lack of schematic diagrams in my preliminary report. For the poster, I’ve designed a System Architecture diagram showing the 'Cascading' logic (MiniLM 
-→
-→
- Mistral-Nemo). Does the marking team prefer to see 'high-level flowcharts' for the showcase, or should I include technical details like the Head-Tail tokenization logic within that diagram?"
+`uv sync` reads `uv.lock` to produce a byte for byte reproducible environment. No other setup is needed for the Python backend.
 
-3. On Problem Justification (Addressing Marker 2 Feedback)
-"Marker 2 felt the problem might be solvable by simple naming conventions. Should I include a specific 'Why AI is Mandatory' section on the poster—highlighting messy data like scan001.pdf and bundled documents—to shut down the 'naming convention' argument immediately?"
+For the React frontend:
 
-4. On the "Showcase" Demonstration (The 30% Mark)
-"For the showcase day, the spec requires a 'running version' of the project. Since mine is a backend processing pipeline, would showing terminal logs of Mistral-Nemo reasoning be sufficient, or would you advise building a basic Streamlit UI to make the demonstration more interactive and accessible for the markers?"
+```bash
+cd web_app
+npm install
+```
 
-5. On Qualitative Analysis (The 1st Class "Originality" Mark)
-"I have exactly one remaining error where even the 12B model failed. To show 'Originality and Critical Analysis,' would it be a good idea to include a small 'Case Study of Failure' box on the poster to explain why that specific document is semantically impossible for the AI, or is it better to focus only on the successes?"
+---
 
-6. On Data Visualization
-"To visualize the 188:1 imbalance, should I include a bar chart of all 23 classes, or is it more 'visually striking' to just compare the Top 5 and Bottom 5 classes in a simplified graphic to keep the poster from being too cluttered?"
+## Model Setup
 
+### Tier 1 — Fine-tuned MiniLM
 
-cross validation
+Place the fine tuned model artefacts in `models/docuclass_minilm/`. The directory must contain:
 
-buiild prompr of the 5 classes filter out classes, way to find the threshold try validate by how many do i have to choose to get 99 to 100 naccuracy
-how accurate ocr is accross document types ie fire statment
+```
+models/docuclass_minilm/
+    config.json
+    model.safetensors
+    tokenizer.json
+    tokenizer_config.json
+    training_args.bin
+```
 
-1. good way to do this for a company
+The label encoder used at inference must be at:
 
-2. people just dont do it, no compliance on the user behalf on floowing naming convention, could be paper docs etc 
-prefixing or keep file nae excel or csv sheet to tell which one is it
+```
+models/baselines/label_encoder.joblib
+```
 
-5. 4 blocks problem interesint g gap how i sole problem then the result how good is it future work what do i need to tackle to make it ant bettereach one picture to make it better
-self explanitory poster show flatmates
+These files are excluded from version control (see `.gitignore`) because they contain trained weights. Obtain them from the project supervisor or retrain from scratch using the pipeline described in [Reproducing Results](#reproducing-results).
 
-code no data
+### Tier 2 — Mistral-Nemo via Ollama
+
+```bash
+ollama pull mistral-nemo
+```
+
+Verify Ollama is running before starting the backend:
+
+```bash
+ollama serve
+```
+
+---
+
+## Configuration
+
+Copy `.env.example` to `.env` and adjust for your environment:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `MODEL_PATH` | `models/docuclass_minilm` | Path to fine tuned MiniLM weights |
+| `ENCODER_PATH` | `models/baselines/label_encoder.joblib` | Path to label encoder |
+| `CLASS_DEFS_PATH` | `data/processed/class_definitions.json` | Statutory class definitions for the adjudicator |
+| `CONFIDENCE_THRESHOLD` | `0.80` | Minimum Tier 1 confidence before Tier 2 escalation. Calibrated on the validation set. Do not lower without re running validation. |
+| `FIDELITY_MIN_CHARS` | `150` | Minimum extractable characters before a document is flagged as a scan and routed to human review |
+| `ADJUDICATOR_URL` | `http://localhost:11434/api/generate` | Ollama API endpoint for Mistral-Nemo |
+| `ADJUDICATOR_MODEL` | `mistral-nemo` | Ollama model name |
+| `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allowed origins for the React frontend |
+
+---
+
+## Running the System
+
+**Start the API backend:**
+
+```bash
+uv run serve
+```
+
+The backend starts at `http://localhost:8000`. Logs print to stdout including classification decisions, Tier 2 escalations, and fidelity gate rejections.
+
+**Start the React frontend (separate terminal):**
+
+```bash
+cd web_app
+npm run dev
+```
+
+The dashboard opens at `http://localhost:5173`.
+
+---
+
+## API Reference
+
+### `GET /health`
+
+Liveness probe. Returns the compute device in use and number of classes loaded.
+
+```json
+{
+  "status": "ok",
+  "device": "mps",
+  "classes_loaded": 23
+}
+```
+
+### `POST /classify`
+
+Classify a planning document.
+
+**Request:** `multipart/form-data` with a `file` field containing a PDF or DOCX.
+
+**Response:**
+
+```json
+{
+  "label": "Design and Access Statement",
+  "confidence": 0.9741,
+  "tier": "Tier 1",
+  "escalation_reason": null,
+  "fidelity_status": "PASSED"
+}
+```
+
+| Field | Description |
+|---|---|
+| `label` | Predicted statutory class name, or `HUMAN_REVIEW_REQUIRED` for scan documents |
+| `confidence` | Tier 1 softmax probability for the predicted class (0–1) |
+| `tier` | `Tier 1`, `Tier 2`, or `N/A` (fidelity failure) |
+| `escalation_reason` | `low_confidence`, `conflict_class_pair`, `low_confidence_and_conflict_pair`, or `null` |
+| `fidelity_status` | `PASSED` or `FAILED` |
+
+### `GET /manifest`
+
+Not yet implemented. Use the **Export CSV** button in the dashboard to download a manifest of the current session's results.
+
+---
+
+## Architecture Overview
+
+```
+Document Input (PDF / DOCX)
+         │
+         ▼
+ ┌───────────────┐
+ │ Text Extraction│  PyMuPDF primary → pypdf fallback
+ └───────┬───────┘
+         │
+         ▼
+ ┌───────────────┐
+ │ Fidelity Gate │  char count < 150 → HUMAN_REVIEW_REQUIRED
+ └───────┬───────┘
+         │ PASSED
+         ▼
+ ┌───────────────────────┐
+ │ Head-Tail Tokenisation│  255 head + 255 tail tokens
+ └───────────┬───────────┘
+             │
+             ▼
+ ┌───────────────────────┐
+ │  MiniLM Tier 1 Triage │  confidence threshold 0.80
+ └───────────┬───────────┘
+             │
+     ┌───────┴────────┐
+     │ confidence      │ conflict pair or
+     │ >= 0.80 AND     │ confidence < 0.80
+     │ not conflict    │
+     ▼                 ▼
+ Tier 1 Result  ┌──────────────────────┐
+                │ Mistral-Nemo Tier 2  │  Ollama, local, zero-shot
+                └──────────┬───────────┘
+                           │
+                           ▼
+                      Tier 2 Result
+                           │
+                           ▼
+                  FastAPI → React Dashboard
+```
+
+---
+
+## Project Structure
+
+```
+DocuClass-AI/
+├── api/
+│   ├── main.py              FastAPI application — classification pipeline
+│   └── cli.py               Entry point for `uv run serve`
+├── src/
+│   ├── extraction.py        Training corpus extraction (PyMuPDF + pypdf)
+│   ├── prepare_data.py      Head-tail tokenisation, stratified split, HF dataset
+│   ├── train_transformer.py MiniLM fine-tuning with Alpha-Weighted Focal Loss
+│   ├── evaluate_minilm.py   Test-set evaluation and confusion matrix
+│   ├── llm_adjuticator.py   Batch Mistral adjudication over model failure cases
+│   ├── prepare_adjudication.py  Builds the adjudication queue CSV
+│   ├── baselines.py         BoW-SVM and TF-IDF-SVM baseline experiments
+│   ├── compare_models.py    Side-by-side metric comparison across all models
+│   ├── error_analysis.py    Qualitative analysis of remaining errors
+│   └── final_results.py     Final accuracy/F1 reporting
+├── web_app/
+│   └── src/App.jsx          React dashboard: upload, results table, CSV export
+├── data/
+│   └── processed/
+│       └── class_definitions.json   Statutory definitions for 23 classes (adjudicator input)
+├── models/
+│   ├── docuclass_minilm/    Fine-tuned MiniLM weights (git-ignored, obtain separately)
+│   └── baselines/           Label encoder (git-ignored, obtain separately)
+├── outputs/
+│   └── figures/             Confusion matrices and evaluation plots
+├── .env.example             Template for environment variable configuration
+├── .python-version          Python 3.13 pin
+├── pyproject.toml           Project metadata and dependencies
+└── uv.lock                  Locked dependency versions (commit this file)
+```
+
+---
+
+## Reproducing Results
+
+`uv.lock` cryptographically pins every dependency version. To validate the environment matches the one used for training:
+
+```bash
+uv sync
+uv run python -c "import torch; print(torch.__version__)"
+```
+
+To retrain from scratch (requires the raw training corpus — see supervisor for access under NDA):
+
+```bash
+# 1. Extract text from raw PDFs
+uv run python src/extraction.py
+
+# 2. Tokenise, encode labels, build HuggingFace dataset
+uv run python src/prepare_data.py
+
+# 3. Fine-tune MiniLM with Alpha-Weighted Focal Loss
+uv run python src/train_transformer.py
+
+# 4. Evaluate on held-out test set
+uv run python src/evaluate_minilm.py
+
+# 5. Run Mistral adjudication over model failures
+uv run python src/llm_adjuticator.py
+```
+
+---
+
+## Acknowledgements
+
+- **MiniLM:** Wang et al. (2020). *MiniLM: Deep Self-Attention Distillation for Task-Agnostic Compression of Pre-Trained Transformers.* NeurIPS 2020.
+- **Focal Loss:** Lin et al. (2017). *Focal Loss for Dense Object Detection.* ICCV 2017.
+- **Training corpus:** UK statutory planning documents provided by industry partner under NDA. Not included in this repository.

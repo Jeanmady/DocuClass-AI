@@ -15,6 +15,10 @@ results/
 .venv/
 __pycache__/
 *.pyc
+*.egg-info/
+
+# Environment variables (keep .env.example, ignore .env)
+.env
 
 # OS generated files
 .DS_Store

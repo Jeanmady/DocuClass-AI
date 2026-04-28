@@ -1,7 +1,7 @@
 [project]
 name = "docuclass-ai"
 version = "0.1.0"
-description = "Add your description here"
+description = "Cascading hybrid classifier for UK statutory planning documents. Two-tier architecture: fine-tuned MiniLM transformer triage with local Mistral-Nemo adjudicator for low-confidence escalation."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -9,11 +9,14 @@ dependencies = [
     "datasets>=4.7.0",
     "evaluate>=0.4.6",
     "fastapi>=0.136.0",
-    "fitz>=0.0.1.dev2",
+    "httpx>=0.28.0",
     "joblib>=1.5.3",
     "openpyxl>=3.1.5",
     "pandas>=3.0.1",
+    "pymupdf>=1.25.0",
+    "pypdf>=5.0.0",
     "python-docx>=1.2.0",
+    "python-dotenv>=1.0.1",
     "python-multipart>=0.0.26",
     "scikit-learn>=1.8.0",
     "seaborn>=0.13.2",
@@ -21,4 +24,24 @@ dependencies = [
     "torchvision>=0.25.0",
     "transformers>=5.3.0",
     "uvicorn>=0.44.0",
+]
+
+[project.scripts]
+# Start the FastAPI backend: uv run serve
+serve = "api.cli:serve"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["api*"]
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.9.0",
 ]
