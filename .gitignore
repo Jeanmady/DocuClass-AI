@@ -2,9 +2,11 @@
 data/raw/
 data/processed/
 
-# Model weights and encoders
-models/
-*.joblib
+# Model weights — safetensors are too large for git (>100 MB).
+# They are hosted on Hugging Face Hub and downloaded automatically on first run.
+# All other model artefacts (config, tokenizer, label encoder) are tracked normally.
+models/docuclass_minilm/model.safetensors
+models/docuclass_minilm/training_args.bin
 
 # Training outputs and logs
 outputs/training_logs/

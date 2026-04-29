@@ -50,38 +50,26 @@ npm install
 
 ## Model Setup
 
-### Tier 1:  Fine tuned MiniLM
+### Tier 1 — Fine-tuned MiniLM (automatic)
 
-Place the fine tuned model artefacts in `models/docuclass_minilm/`. The directory must contain:
-
-```
-models/docuclass_minilm/
-    config.json
-    model.safetensors
-    tokenizer.json
-    tokenizer_config.json
-    training_args.bin
-```
-
-The label encoder used at inference must be at:
+The fine tuned weights are hosted on Hugging Face Hub. **No manual setup is needed** on first startup, `uv run serve` detects that the weights are missing and downloads them automatically:
 
 ```
-models/baselines/label_encoder.joblib
+INFO  Model weights not found locally. Downloading from Hugging Face Hub: Jeanmady/docuclass-minilm
+INFO  This only happens on first run — subsequent starts are instant.
 ```
 
-These files are excluded from version control (see `.gitignore`) because they contain trained weights. Obtain them from the project supervisor or retrain from scratch using the pipeline described in [Reproducing Results](#reproducing-results).
+The download is ~130 MB and takes roughly 30–60 seconds on a standard connection. After that, the weights are cached in `models/docuclass_minilm/` and subsequent starts are instant.
 
-### Tier 2: Mistral-Nemo via Ollama
+The `label_encoder.joblib` and tokenizer config files are committed directly to the repository and require no separate download.
+
+### Tier 2 — Mistral-Nemo via Ollama
 
 ```bash
 ollama pull mistral-nemo
 ```
 
-Verify Ollama is running before starting the backend:
-
-```bash
-ollama serve
-```
+Ollama runs as a background service — if it is already running, you do not need to start it again.
 
 ---
 

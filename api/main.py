@@ -26,6 +26,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pypdf import PdfReader
+from huggingface_hub import snapshot_download
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 load_dotenv()
@@ -53,6 +54,11 @@ FIDELITY_MIN_CHARS: int = int(os.getenv("FIDELITY_MIN_CHARS", "150"))
 ADJUDICATOR_URL: str = os.getenv("ADJUDICATOR_URL", "http://localhost:11434/api/generate")
 ADJUDICATOR_MODEL: str = os.getenv("ADJUDICATOR_MODEL", "mistral-nemo")
 
+# Hugging Face Hub repo containing the fine-tuned MiniLM weights.
+# If MODEL_PATH does not exist locally, weights are downloaded from this repo
+# automatically on first startup. Set to empty string to disable auto-download.
+HF_MODEL_REPO: str = os.getenv("HF_MODEL_REPO", "Jeanmady/docuclass-minilm")
+
 # Comma separated list of allowed CORS origins (default: Vite dev server)
 CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 
@@ -76,14 +82,44 @@ logger = logging.getLogger("docuclassai")
 _state: dict = {}
 
 
+def _ensure_model_weights() -> None:
+    """
+    Download fine-tuned MiniLM weights from Hugging Face Hub if not present locally.
+
+    Called once at startup. If MODEL_PATH already contains the weights this is a
+    no-op. If the directory is missing and HF_MODEL_REPO is set, snapshot_download
+    pulls the full repository into MODEL_PATH. This allows a fresh clone to start
+    the server without any manual model setup step.
+    """
+    if MODEL_PATH.exists() and any(MODEL_PATH.iterdir()):
+        return
+
+    if not HF_MODEL_REPO:
+        raise RuntimeError(
+            f"Model weights not found at {MODEL_PATH} and HF_MODEL_REPO is not set.\n"
+            "Either place the model files manually or set HF_MODEL_REPO in .env."
+        )
+
+    logger.info(
+        "Model weights not found locally. Downloading from Hugging Face Hub: %s",
+        HF_MODEL_REPO,
+    )
+    logger.info("This only happens on first run — subsequent starts are instant.")
+    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_download(repo_id=HF_MODEL_REPO, local_dir=str(MODEL_PATH))
+    logger.info("Model download complete.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Validate artefacts exist and load model into memory before serving."""
-    for path in (MODEL_PATH, ENCODER_PATH, CLASS_DEFS_PATH):
+    """Download model weights if needed, then load everything into memory."""
+    _ensure_model_weights()
+
+    for path in (ENCODER_PATH, CLASS_DEFS_PATH):
         if not path.exists():
             raise RuntimeError(
                 f"Required artefact missing at startup: {path}\n"
-                "See README — 'Model Setup' section for download instructions."
+                "See README — 'Model Setup' section for details."
             )
 
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
