@@ -32,8 +32,6 @@ load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Configuration
-# All configurable values come from environment variables so that a planning
-# authority IT team can adjust thresholds without touching source code.
 # ---------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -48,8 +46,8 @@ CLASS_DEFS_PATH = Path(os.getenv("CLASS_DEFS_PATH", str(BASE_DIR / "data" / "pro
 # Do not lower this value without re-running validation on your deployment corpus.
 CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.80"))
 
-# Documents with fewer extractable characters than this are treated as image-based
-# scans and routed to human review rather than force-classified.
+# Documents with fewer extractable characters than this are treated as image based
+# scans and routed to human review rather than force classified!!.
 FIDELITY_MIN_CHARS: int = int(os.getenv("FIDELITY_MIN_CHARS", "150"))
 
 ADJUDICATOR_URL: str = os.getenv("ADJUDICATOR_URL", "http://localhost:11434/api/generate")
@@ -59,9 +57,7 @@ ADJUDICATOR_MODEL: str = os.getenv("ADJUDICATOR_MODEL", "mistral-nemo")
 CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 
 # The Environmental Statement / Biodiversity Survey conflict pair triggers Tier 2
-# escalation regardless of confidence score. These two document types are semantically
-# overlapping (both cover ecology), but the downstream regulatory obligations differ.
-# Misclassification between them cannot be resolved by confidence alone.
+# escalation regardless of confidence score. 
 _CONFLICT_PAIR: frozenset[str] = frozenset({
     "Environmental statement",
     "Biodiversity survey and report",

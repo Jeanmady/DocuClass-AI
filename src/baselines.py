@@ -9,7 +9,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.svm import LinearSVC
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
 
-# Directory Management
+# Dir Management
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
 DATA_PATH = ROOT_DIR / "data" / "processed" / "processed_corpus.csv"
@@ -28,10 +28,10 @@ def load_and_clean_data(file_path):
     
     df = pd.read_csv(file_path)
     
-    # Force the 'text' column to string type and handle real NaN objects
+    # Force the text column to string type and handle real NaN objects
     df['text'] = df['text'].astype(str)
     
-    # Replace common 'null' string indicators with actual NaNs for easy dropping
+    # Replace common null string indicators with actual NaNs for easy dropping
     df['text'] = df['text'].replace(['nan', 'None', 'nan ', ' nan'], np.nan, regex=True)
     df = df.dropna(subset=['text'])
     
@@ -60,11 +60,11 @@ def run_baseline_comparison(df):
     for name, vectorizer in pipelines:
         print(f"\n--- Evaluating Pipeline: {name} ---")
         
-        # Pre-process text for CV
+        # Preprocess text for CV
         X = vectorizer.fit_transform(df['text'])
         y = df['label']
         
-        # STRATIFIED CROSS-VALIDATION
+        # STRATIFIED CROSS VALIDATION
         # use 5 folds to ensure every document is used in a test set once.
         skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         print("Running 5-Fold Stratified Cross-Validation...")

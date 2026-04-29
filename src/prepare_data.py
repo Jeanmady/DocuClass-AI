@@ -24,7 +24,7 @@ def load_and_sanitise_corpus(path):
     """
     df = pd.read_csv(path)
     
-    # Cast to string and drop nulls to prevent 'TypeError: TextEncodeInput' 
+    # Cast to string and drop nulls to prevent TypeError: TextEncodeInput
     df['text'] = df['text'].astype(str)
     df = df.replace('nan', np.nan).dropna(subset=['text'])
     

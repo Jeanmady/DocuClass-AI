@@ -25,7 +25,7 @@ LOGS_DIR = ROOT_DIR / "outputs" / "training_logs"
 class FocalLoss(nn.Module):
     """
     Implements Alpha-Weighted Focal Loss. 
-    Manual implementation to bypass MPS-specific weighted cross-entropy bugs.
+    Manual implementation to bypass MPS specific weighted cross-entropy bugs.
     """
     def __init__(self, alpha=None, gamma=2.0):
         super(FocalLoss, self).__init__()
@@ -93,10 +93,10 @@ def calculate_class_weights(dataset):
     counts = np.bincount(labels)
     total = len(labels)
 
-    # Creates a strong penalty without destabilizing the gradients.
+    # Creates a strong penalty without destabilising the gradients.
     weights = total / np.sqrt(counts) 
 
-    # Normalize so the average weight is 1.0
+    # Normalise so the average weight is 1.0
     weights = weights / weights.mean()
     return torch.tensor(weights, dtype=torch.float)
 
@@ -111,7 +111,7 @@ def run_training():
     num_labels = len(encoder.classes_)
 
     # Calculate weights for the 'Alpha' parameter in Focal Loss
-    print("Calculating class-aware weights for Focal Loss...")
+    print("Calculating class aware weights for Focal Loss...")
     alpha_weights = calculate_class_weights(ds["train"])
 
     # Model and Tokenizer Setup
@@ -134,7 +134,7 @@ def run_training():
         save_strategy="epoch",
         load_best_model_at_end=True,
         metric_for_best_model="f1",
-        max_grad_norm=1.0,            # <--- This stops the 55.0 spikes
+        max_grad_norm=1.0,            # stops the 55.0 spikes
         dataloader_num_workers=0
     )
 

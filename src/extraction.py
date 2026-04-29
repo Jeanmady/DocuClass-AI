@@ -5,7 +5,7 @@ Walks the raw training data directory, extracts text from every PDF, and writes
 the result to a single CSV used by all downstream training and evaluation scripts.
 
 PyMuPDF is the primary extractor. pypdf is used as a fallback. Documents that
-yield fewer characters than FIDELITY_MIN_CHARS are flagged as low-fidelity scans
+yield fewer characters than FIDELITY_MIN_CHARS are flagged as low fidelity scans
 rather than silently discarded so that the training pipeline can report coverage.
 """
 
@@ -29,7 +29,7 @@ ROOT_DIR = SCRIPT_DIR.parent
 DATA_ROOT = ROOT_DIR / "data" / "raw" / "Train-v0"
 OUTPUT_CSV = ROOT_DIR / "data" / "processed" / "processed_corpus.csv"
 
-# Documents with fewer characters than this are image-based scans. They are
+# Documents with fewer characters than this are image based scans. They are
 # flagged with is_empty=1 rather than dropped, so the fidelity analysis in
 # prepare_data.py can exclude them from the training set explicitly.
 FIDELITY_MIN_CHARS: int = 150
@@ -43,7 +43,7 @@ def passes_fidelity_gate(text: str, min_chars: int = FIDELITY_MIN_CHARS) -> bool
     Documents below min_chars are assumed to be image-based scans (e.g.
     photographed paper documents) where PyMuPDF and pypdf can extract no
     useful text. These must be routed to human review rather than
-    force-classified. This requirement is especially important for Fire
+    force classified. This requirement is especially important for Fire
     Statements, which disproportionately arrive as scans and carry direct
     regulatory consequence under the Building Safety Act 2022.
 
@@ -58,10 +58,10 @@ def extract_text_from_pdf(pdf_path: str | Path) -> str:
     Extract text from a PDF file using PyMuPDF as the primary extractor,
     with pypdf as a fallback.
 
-    PyMuPDF handles complex layouts, CID-mapped fonts, and multi-column
+    PyMuPDF handles complex layouts, CID mapped fonts, and multi column
     documents more reliably than pypdf. If PyMuPDF is unavailable or raises
     an exception, pypdf is attempted. If both fail, an empty string is
-    returned — the caller uses passes_fidelity_gate() to decide what to do
+    returned, the caller uses passes_fidelity_gate() to decide what to do
     with low-yield documents rather than crashing.
     """
     if _PYMUPDF_AVAILABLE:
@@ -92,7 +92,7 @@ def run_extraction() -> None:
 
     Each row records: filename, path, label (class folder name), extracted text,
     character count, and is_empty flag. The is_empty flag is set when the document
-    does not pass the fidelity gate — downstream scripts use this to filter scans.
+    does not pass the fidelity gate downstream scripts use this to filter scans.
     """
     corpus_data = []
 
