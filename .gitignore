@@ -1,6 +1,7 @@
-# Data folders
+# Data folders — raw corpus and generated pipeline artefacts excluded (large / NDA)
 data/raw/
-data/processed/
+data/processed/*.csv
+data/processed/processed_dataset/
 
 # Model weights — safetensors are too large for git (>100 MB).
 # They are hosted on Hugging Face Hub and downloaded automatically on first run.
