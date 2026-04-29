@@ -50,7 +50,7 @@ npm install
 
 ## Model Setup
 
-### Tier 1 — Fine-tuned MiniLM
+### Tier 1:  Fine tuned MiniLM
 
 Place the fine tuned model artefacts in `models/docuclass_minilm/`. The directory must contain:
 
@@ -71,7 +71,7 @@ models/baselines/label_encoder.joblib
 
 These files are excluded from version control (see `.gitignore`) because they contain trained weights. Obtain them from the project supervisor or retrain from scratch using the pipeline described in [Reproducing Results](#reproducing-results).
 
-### Tier 2 — Mistral-Nemo via Ollama
+### Tier 2: Mistral-Nemo via Ollama
 
 ```bash
 ollama pull mistral-nemo
@@ -204,7 +204,7 @@ Document Input (PDF / DOCX)
      │ not conflict    │
      ▼                 ▼
  Tier 1 Result  ┌──────────────────────┐
-                │ Mistral-Nemo Tier 2  │  Ollama, local, zero-shot
+                │ Mistral-Nemo Tier 2  │  Ollama, local, zero shot
                 └──────────┬───────────┘
                            │
                            ▼
@@ -221,17 +221,17 @@ Document Input (PDF / DOCX)
 ```
 DocuClass-AI/
 ├── api/
-│   ├── main.py              FastAPI application — classification pipeline
+│   ├── main.py              FastAPI application: classification pipeline
 │   └── cli.py               Entry point for `uv run serve`
 ├── src/
 │   ├── extraction.py        Training corpus extraction (PyMuPDF + pypdf)
 │   ├── prepare_data.py      Head-tail tokenisation, stratified split, HF dataset
-│   ├── train_transformer.py MiniLM fine-tuning with Alpha-Weighted Focal Loss
-│   ├── evaluate_minilm.py   Test-set evaluation and confusion matrix
+│   ├── train_transformer.py MiniLM fine tuning with Alpha-Weighted Focal Loss
+│   ├── evaluate_minilm.py   Test set evaluation and confusion matrix
 │   ├── llm_adjuticator.py   Batch Mistral adjudication over model failure cases
 │   ├── prepare_adjudication.py  Builds the adjudication queue CSV
 │   ├── baselines.py         BoW-SVM and TF-IDF-SVM baseline experiments
-│   ├── compare_models.py    Side-by-side metric comparison across all models
+│   ├── compare_models.py    Side by- ide metric comparison across all models
 │   ├── error_analysis.py    Qualitative analysis of remaining errors
 │   └── final_results.py     Final accuracy/F1 reporting
 ├── web_app/
@@ -240,14 +240,14 @@ DocuClass-AI/
 │   └── processed/
 │       └── class_definitions.json   Statutory definitions for 23 classes (adjudicator input)
 ├── models/
-│   ├── docuclass_minilm/    Fine-tuned MiniLM weights (git-ignored, obtain separately)
-│   └── baselines/           Label encoder (git-ignored, obtain separately)
+│   ├── docuclass_minilm/    Fine tuned MiniLM weights (git ignored, obtain separately)
+│   └── baselines/           Label encoder (git ignored, obtain separately)
 ├── outputs/
 │   └── figures/             Confusion matrices and evaluation plots
 ├── .env.example             Template for environment variable configuration
 ├── .python-version          Python 3.13 pin
 ├── pyproject.toml           Project metadata and dependencies
-└── uv.lock                  Locked dependency versions (commit this file)
+└── uv.lock                  Locked dependency versions 
 ```
 
 ---
@@ -261,7 +261,7 @@ uv sync
 uv run python -c "import torch; print(torch.__version__)"
 ```
 
-To retrain from scratch (requires the raw training corpus — see supervisor for access under NDA):
+To retrain from scratch (requires the raw training corpus: see supervisor for access under NDA):
 
 ```bash
 # 1. Extract text from raw PDFs
