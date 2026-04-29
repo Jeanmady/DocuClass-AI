@@ -91,7 +91,7 @@ def _ensure_model_weights() -> None:
     pulls the full repository into MODEL_PATH. This allows a fresh clone to start
     the server without any manual model setup step.
     """
-    if MODEL_PATH.exists() and any(MODEL_PATH.iterdir()):
+    if (MODEL_PATH / "model.safetensors").exists():
         return
 
     if not HF_MODEL_REPO:
